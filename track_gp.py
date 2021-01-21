@@ -49,7 +49,6 @@ def parse_args():
     parser.add_argument("--d_ff", type=int, default=512)
     parser.add_argument("--n_heads", type=int, default=12)
     parser.add_argument("--n_layers", type=int, default=12)
-    parser.add_argument("--fine_lr", type=float, default=1e-1)
     parser.add_argument("--pre_epochs", type=int, default=5)
     parser.add_argument("--fine_epochs", type=int, default=0)
     parser.add_argument(
@@ -59,6 +58,7 @@ def parse_args():
     parser.add_argument("--data_dir", type=str, default="data/finetune-trans")
     parser.add_argument("--no_bias", action="store_true")
     parser.add_argument("--data", choices=["wikitext-2", "penn"], default="wikitext-2")
+    parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--wd", type=float, default=.1)
     return parser.parse_args()
 
@@ -170,12 +170,12 @@ def main(args):
         train_mask,
         dev_tokens,
         dev_mask,
-        optim.SGD(model.parameters(), weight_decay=args.wd),
+        optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.wd),
         epochs=args.pre_epochs,
     )
 
     os.makedirs("data/wd")
-    with open("data/wd/{args.data}-{args.trans}-{args.wd}", "wb") as fh:
+    with open("data/wd/{args.data}-{args.trans}-lr={args.lr}-wd={args.wd}.dat", "wb") as fh:
         pickle.dump(timeseries, fh)
 
 
