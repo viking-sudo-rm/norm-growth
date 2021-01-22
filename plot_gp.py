@@ -18,6 +18,7 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--wd", type=float, default=0.)
     parser.add_argument("--window", type=int, default=100)
+    parser.add_argument("--data_dir", type=str, default="/net/nfs.corp/allennlp/willm/cached")
     return parser.parse_args()
 
 
@@ -59,7 +60,7 @@ def smooth(signal, window=100):
 
 
 def main(args):
-    path = f"data/wd/wikitext-2-vaswani-{args.optim}-lr={args.lr}-wd={args.wd}.dat"
+    path = f"{args.data_dir}/wd/wikitext-2-vaswani-{args.optim}-lr={args.lr}-wd={args.wd}.dat"
     with open(path, "rb") as fh:
         timeseries = pickle.load(fh)
     
@@ -88,7 +89,7 @@ def main(args):
     # Plot all the stuff.
     plt.fill_between(xs, ymin, ys, color="red", alpha=.1)
     plt.plot(xs, ys, linestyle="--", color="black")
-    line, = plt.plot(mean_delta, smooth_proj, alpha=.2)
+    line, = plt.plot(mean_delta, smooth_proj)
     add_arrow(line)
 
     # Add various labels.

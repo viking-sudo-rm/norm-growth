@@ -184,9 +184,10 @@ def main(args):
         epochs=args.epochs,
     )
 
-    if not os.path.exists("data/wd"):
-        os.makedirs("data/wd")
-    filename = f"data/wd/{args.data}-{args.trans}-{args.optim}-lr={args.lr}-wd={args.wd}.dat"
+    data_dir = "/net/nfs.corp/allennlp/willm/cached/wd"
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    filename = f"{data_dir}/{args.data}-{args.trans}-{args.optim}-lr={args.lr}-wd={args.wd}.dat"
     with open(filename, "wb") as fh:
         pickle.dump(timeseries, fh)
 
