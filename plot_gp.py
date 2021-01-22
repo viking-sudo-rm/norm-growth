@@ -14,8 +14,10 @@ from rich import print
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--wd", type=float, default=1e-2)
+    parser.add_argument("--optim", type=str, choices=["sgd", "adamw"], default="sgd")
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--wd", type=float, default=0.)
+    parser.add_argument("--window", type=int, default=100)
     return parser.parse_args()
 
 
@@ -52,38 +54,53 @@ def add_arrow(line, position=None, direction='right', size=15, color=None):
     )
 
 
+def smooth(signal, window=100):
+    return np.convolve(signal, np.ones(window) / window, mode="valid")
+
+
 def main(args):
-    path = f"data/wd/wikitext-2-vaswani-lr={args.lr}-wd={args.wd}.dat"
+    path = f"data/wd/wikitext-2-vaswani-{args.optim}-lr={args.lr}-wd={args.wd}.dat"
     with open(path, "rb") as fh:
         timeseries = pickle.load(fh)
     
-    ps = np.array(timeseries["pnorms"])
-    ds = np.array(timeseries["dnorms"])
+    projs = np.array(timeseries["projs"])
+    deltas = np.array(timeseries["dnorms"])
+    deltas_sq = deltas * deltas 
 
-    mean_p = np.median(ps, axis=1)
-    mean_d = np.median(ds, axis=1)
-    smooth_d = savgol_filter(mean_d, 103, 3)
+    mean_proj = np.median(projs, axis=1)
+    smooth_proj = smooth(mean_proj, args.window)  # SMOOTHING
 
-    # Set up phase regions.
-    slope = np.sqrt(args.wd - args.wd * args.wd)
-    ys = slope * mean_p
-    plt.fill_between(mean_p, 0, ys, color="red", alpha=.1)
-    # plt.fill_between(mean_p, ys, 1, color="blue", alpha=.1)
-    plt.plot(mean_p, ys, linestyle="--", color="black")
+    mean_delta_sq = np.median(deltas_sq, axis=1)
+    mean_delta_sq = smooth(mean_delta_sq, args.window)  # SMOOTHING
+    mean_delta = np.sqrt(mean_delta_sq)
 
-    # See https://stackoverflow.com/questions/34017866/arrow-on-a-line-plot-with-matplotlib.
-    line, = plt.plot(mean_p, smooth_d)
+    # Compute the boundary curve.
+    xs = np.array(sorted(mean_delta))
+    ys = -.5 * np.array(sorted(mean_delta_sq))
+
+    # Set up scaling.
+    ymin = min(min(ys), min(smooth_proj))
+    ymax = max(max(ys), max(smooth_proj))
+    yrange = ymax - ymin
+    ymin -= yrange / 2
+    ymax += yrange / 2
+
+    # Plot all the stuff.
+    plt.fill_between(xs, ymin, ys, color="red", alpha=.1)
+    plt.plot(xs, ys, linestyle="--", color="black")
+    line, = plt.plot(mean_delta, smooth_proj, alpha=.2)
     add_arrow(line)
 
+    # Add various labels.
+    plt.title(fR"Trajectory with {args.optim} ($\eta = {args.lr}, \lambda = {args.wd}$)")
     plt.xlabel(R"$\Vert \delta_t \Vert$")
-    plt.ylabel(R"$\Vert \theta_t \Vert$")
-    plt.yscale("log")
-    # plt.xscale("log")
+    plt.ylabel(R"$\theta_t^\top \cdot \delta_t$")
+    plt.ylim(ymin=ymin, ymax=ymax)
 
     if not os.path.exists("figs/wd"):
         os.makedirs("figs/wd")
     
-    filename = f"figs/wd/lr={args.lr}-wd={args.wd}.pdf"
+    filename = f"figs/wd/{args.optim}-lr={args.lr}-wd={args.wd}.pdf"
     plt.savefig(filename)
     print(f"Saved [green]{filename}[/green].")
 
