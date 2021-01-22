@@ -174,9 +174,13 @@ def main(args):
         epochs=args.pre_epochs,
     )
 
-    os.makedirs("data/wd")
-    with open("data/wd/{args.data}-{args.trans}-lr={args.lr}-wd={args.wd}.dat", "wb") as fh:
+    if not os.path.exists("data/wd"):
+        os.makedirs("data/wd")
+    filename = f"data/wd/{args.data}-{args.trans}-lr={args.lr}-wd={args.wd}.dat"
+    with open(filename, "wb") as fh:
         pickle.dump(timeseries, fh)
+
+    print(f"Saved {filename}.")
 
 
 if __name__ == "__main__":

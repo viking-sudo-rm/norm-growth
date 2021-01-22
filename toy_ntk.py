@@ -1,3 +1,5 @@
+"""Basic experiments with saturated networks and NTK regression."""
+
 import torch
 from torch import nn
 from torch.autograd import grad

@@ -1,3 +1,5 @@
+"""Script for training transformers with potential architectural modifications."""
+
 from typing import List
 import tqdm
 import torch
