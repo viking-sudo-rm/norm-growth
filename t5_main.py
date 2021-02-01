@@ -169,12 +169,12 @@ def main(args):
                     dir_sims_by_layer[layer].append(dir_sim_)
 
     # Save the norm data, which is expensive to compute.
-    with open(f"{PATH}/t5-deriv/norms.dat", "wb") as fh:
-        pickle.dump(norms, fh)
-    with open(f"{PATH}/t5-deriv/ckpts.dat", "wb") as fh:
-        pickle.dump(ckpt_ids, fh)
-    with open(f"{PATH}/t5-deriv/norms_by_layer.dat", "wb") as fh:
-        pickle.dump(norms_by_layer, fh)
+    # with open(f"{PATH}/t5-deriv/norms.dat", "wb") as fh:
+    #     pickle.dump(norms, fh)
+    # with open(f"{PATH}/t5-deriv/ckpts.dat", "wb") as fh:
+    #     pickle.dump(ckpt_ids, fh)
+    # with open(f"{PATH}/t5-deriv/norms_by_layer.dat", "wb") as fh:
+    #     pickle.dump(norms_by_layer, fh)
     
     # Save the cosine distance data.
     with open(f"{PATH}/t5-deriv/dir_sims.dat", "wb") as fh:
