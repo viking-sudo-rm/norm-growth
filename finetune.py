@@ -1,3 +1,5 @@
+"""Script for saturation finetuning with basic autoencoder models."""
+
 import tqdm
 import torch
 from collections import defaultdict

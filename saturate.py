@@ -1,3 +1,5 @@
+"""Analyze attention distribution in saturated saved transformer language models."""
+
 from typing import List
 from math import sqrt
 import torch

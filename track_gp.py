@@ -27,6 +27,11 @@ from src.utils import pad_sequence_to_len, get_mask
 
 PATH = "/net/nfs.corp/allennlp/willm/data"
 
+optims = {
+    "sgd": optim.SGD,
+    "adamw": optim.AdamW,
+}
+
 logging.basicConfig(
     level="NOTSET",
     format="%(message)s",
@@ -49,9 +54,7 @@ def parse_args():
     parser.add_argument("--d_ff", type=int, default=512)
     parser.add_argument("--n_heads", type=int, default=12)
     parser.add_argument("--n_layers", type=int, default=12)
-    parser.add_argument("--fine_lr", type=float, default=1e-1)
-    parser.add_argument("--pre_epochs", type=int, default=5)
-    parser.add_argument("--fine_epochs", type=int, default=0)
+    parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument(
         "--trans", type=str, default="vaswani", choices=["vaswani"] + list(transformers.keys())
     )
@@ -59,7 +62,10 @@ def parse_args():
     parser.add_argument("--data_dir", type=str, default="data/finetune-trans")
     parser.add_argument("--no_bias", action="store_true")
     parser.add_argument("--data", choices=["wikitext-2", "penn"], default="wikitext-2")
-    parser.add_argument("--wd", type=float, default=.1)
+
+    parser.add_argument("--optim", type=str, choices=["sgd", "adamw"], default="sgd")
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--wd", type=float, default=0.)
     return parser.parse_args()
 
 
@@ -104,9 +110,11 @@ def train_model(
 
             pnorms = [p.norm(p=2).item() for p in params]
             dnorms = [d.norm(p=2).item() for d in deltas]
+            projs = [(d.flatten() @ p.flatten()).item() for d, p in zip(params, deltas)]
 
             timeseries["pnorms"].append(pnorms)
             timeseries["dnorms"].append(dnorms)
+            timeseries["projs"].append(projs)
 
         # model.eval()
         # metrics = get_metrics(args, model, dev_tokens, dev_mask, device=device)
@@ -163,6 +171,8 @@ def main(args):
     if args.half:
         model = model.half()
 
+    optim = optims[args.optim]
+
     timeseries = train_model(
         args,
         model,
@@ -170,13 +180,18 @@ def main(args):
         train_mask,
         dev_tokens,
         dev_mask,
-        optim.SGD(model.parameters(), weight_decay=args.wd),
-        epochs=args.pre_epochs,
+        optim(model.parameters(), lr=args.lr, weight_decay=args.wd),
+        epochs=args.epochs,
     )
 
-    os.makedirs("data/wd")
-    with open("data/wd/{args.data}-{args.trans}-{args.wd}", "wb") as fh:
+    data_dir = "/net/nfs.corp/allennlp/willm/cached/wd"
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    filename = f"{data_dir}/{args.data}-{args.trans}-{args.optim}-lr={args.lr}-wd={args.wd}.dat"
+    with open(filename, "wb") as fh:
         pickle.dump(timeseries, fh)
+
+    print(f"Saved {filename}.")
 
 
 if __name__ == "__main__":

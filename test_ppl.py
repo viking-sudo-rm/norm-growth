@@ -1,3 +1,5 @@
+"""Compute perplexity of trainined models on the test set."""
+
 import torch
 from torch import nn
 import argparse

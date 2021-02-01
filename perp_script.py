@@ -1,3 +1,5 @@
+"""Access pickled training metrics for trained transformer models."""
+
 import pickle
 import os
 from rich import print
