@@ -69,6 +69,7 @@ def parse_args():
     parser.add_argument("--wd_range", type=int, default=5)
     parser.add_argument("--lr_range", type=int, default=5)
     parser.add_argument("--optim", default="SGD", choices=optims.keys())
+    parser.add_argument("--n_gpus", type=int)
     return parser.parse_args()
 
 
@@ -173,8 +174,7 @@ def run_exp(gpu_num, in_queue):
 
 
 def main():
-    n_gpus = 3  # torch.cuda.device_count()
-    gpus = [str(x) for x in range(n_gpus)]
+    gpus = [str(x) for x in range(args.n_gpus)]
     gpus.extend(gpus)
 
     optim = optims[args.optim]
