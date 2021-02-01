@@ -20,7 +20,7 @@ class experiment:
     def __init__(self, name=None, default=False):
         self.name = name
         self.default = default
-    
+
     def __call__(self, callback):
         name = self.name or callback.__name__
         self.registry[name] = callback
@@ -49,15 +49,6 @@ def parse_args():
 
 
 def add_arrow(line, position=None, direction='right', size=15, color=None):
-    """
-    add an arrow to a line.
-
-    line:       Line2D object
-    position:   x-position of the arrow. If None, mean of xdata is taken
-    direction:  'left' or 'right'
-    size:       size of the arrow in fontsize points
-    color:      if None, line color is taken.
-    """
     if color is None:
         color = line.get_color()
 
@@ -85,22 +76,32 @@ def smooth(signal, window=100):
     return np.convolve(signal, np.ones(window) / window, mode="valid")
 
 
+def consume(timeseries, args):
+    """Get parameter time series data from `timeseries`."""
+    projs = np.array(timeseries["projs"])
+    deltas = np.array(timeseries["dnorms"])
+    deltas_sq = deltas * deltas 
+
+    # TODO: What is the right statistic to use here? Median seems the best.
+    mean_proj = np.median(projs, axis=1)
+    mean_delta_sq = np.median(deltas_sq, axis=1)
+
+    # Smooth these things.
+    mean_proj = smooth(mean_proj, args.window)  # SMOOTHING
+    mean_delta_sq = smooth(mean_delta_sq, args.window)  # SMOOTHING
+
+    mean_delta = np.sqrt(mean_delta_sq)
+
+    return mean_delta, mean_proj
+
+
 @experiment(default=True)
 def main(args):
     path = f"{args.data_dir}/wd/wikitext-2-vaswani-{args.optim}-lr={args.lr}-wd={args.wd}.dat"
     with open(path, "rb") as fh:
         timeseries = pickle.load(fh)
-    
-    projs = np.array(timeseries["projs"])
-    deltas = np.array(timeseries["dnorms"])
-    deltas_sq = deltas * deltas 
 
-    mean_proj = np.median(projs, axis=1)
-    smooth_proj = smooth(mean_proj, args.window)  # SMOOTHING
-
-    mean_delta_sq = np.median(deltas_sq, axis=1)
-    mean_delta_sq = smooth(mean_delta_sq, args.window)  # SMOOTHING
-    mean_delta = np.sqrt(mean_delta_sq)
+    mean_delta, mean_proj = consume(timeseries, args)
 
     # Compute the boundary curve.
     xmax = max(mean_delta)
@@ -108,8 +109,8 @@ def main(args):
     ys = -.5 * xs * xs
 
     # Set up scaling.
-    ymin = min(min(ys), min(smooth_proj))
-    ymax = max(max(ys), max(smooth_proj))
+    ymin = min(min(ys), min(mean_proj))
+    ymax = max(max(ys), max(mean_proj))
     yrange = ymax - ymin
     ymin -= yrange / 2
     ymax += yrange / 2
@@ -117,7 +118,7 @@ def main(args):
     # Plot all the stuff.
     plt.fill_between(xs, ymin, ys, color="red", alpha=.1)
     plt.plot(xs, ys, linestyle="--", color="black")
-    line, = plt.plot(mean_delta, smooth_proj)
+    line, = plt.plot(mean_delta, mean_proj)
     add_arrow(line)
 
     # Add various labels.
@@ -128,7 +129,7 @@ def main(args):
 
     if not os.path.exists("figs/wd"):
         os.makedirs("figs/wd")
-    
+
     filename = f"figs/wd/{args.optim}-lr={args.lr}-wd={args.wd}.pdf"
     plt.savefig(filename)
     print(f"Saved [green]{filename}[/green].")
@@ -147,24 +148,15 @@ def vary_lr(args):
         path = f"{args.data_dir}/wd/wikitext-2-vaswani-{args.optim}-lr={lr}-wd={args.wd}.dat"
         with open(path, "rb") as fh:
             timeseries = pickle.load(fh)
-        
-        projs = np.array(timeseries["projs"])
-        deltas = np.array(timeseries["dnorms"])
-        deltas_sq = deltas * deltas 
 
-        mean_proj = np.median(projs, axis=1)
-        smooth_proj = smooth(mean_proj, args.window)  # SMOOTHING
-
-        mean_delta_sq = np.median(deltas_sq, axis=1)
-        mean_delta_sq = smooth(mean_delta_sq, args.window)  # SMOOTHING
-        mean_delta = np.sqrt(mean_delta_sq)
+        mean_delta, mean_proj = consume(timeseries, args)
 
         all_xs[lr] = mean_delta
-        all_ys[lr] = smooth_proj
+        all_ys[lr] = mean_proj
         xmax = max(xmax, max(mean_delta))
-        ymin = min(ymin, min(smooth_proj))
-        ymax = max(ymax, max(smooth_proj))
-    
+        ymin = min(ymin, min(mean_proj))
+        ymax = max(ymax, max(mean_proj))
+
     xs = np.linspace(0, xmax, 1000)
     ys = -.5 * xs * xs
     ymin = min(ymin, min(ys))
@@ -183,16 +175,68 @@ def vary_lr(args):
     # Add various labels.
     plt.legend()
     plt.xscale("log")
-    # plt.yscale("symlog")
-    plt.title(fR"Trajectory with {args.optim} ($\eta = {args.lr}, \lambda = {args.wd}$)")
+    plt.yscale("symlog")
+    plt.title(fR"Trajectory with {args.optim} ($\lambda = {args.wd}$)")
     plt.xlabel(R"$\Vert \delta_t \Vert$")
     plt.ylabel(R"$\theta_t^\top \cdot \delta_t$")
     plt.ylim(ymin=ymin, ymax=ymax)
-        
+
     if not os.path.exists("figs/wd"):
         os.makedirs("figs/wd")
-    
+
     filename = f"figs/wd/{args.optim}-lr=vary-wd={args.wd}.pdf"
+    plt.savefig(filename)
+    print(f"Saved [green]{filename}[/green].")
+
+
+@experiment()
+def vary_wd(args):
+    all_xs = {}
+    all_ys = {}
+    xmax = 0.
+    ymin, ymax = float("inf"), 0.
+
+    for wd in [1e-2, 1e-3, 1e-4]:
+        path = f"{args.data_dir}/wd/wikitext-2-vaswani-{args.optim}-lr={args.lr}-wd={wd}.dat"
+        with open(path, "rb") as fh:
+            timeseries = pickle.load(fh)
+
+        mean_delta, mean_proj = consume(timeseries, args)
+
+        all_xs[wd] = mean_delta
+        all_ys[wd] = mean_proj
+        xmax = max(xmax, max(mean_delta))
+        ymin = min(ymin, min(mean_proj))
+        ymax = max(ymax, max(mean_proj))
+
+    xs = np.linspace(0, xmax, 1000)
+    ys = -.5 * xs * xs
+    ymin = min(ymin, min(ys))
+    ymax = max(ymax, max(ys))
+    yrange = ymax - ymin
+    ymin -= yrange / 2
+    ymax += yrange / 2
+
+    plt.fill_between(xs, ymin * np.ones_like(ys), ys, color="red", alpha=.1)
+    plt.plot(xs, ys, linestyle="--", color="black")
+
+    for wd in all_xs.keys():
+        line, = plt.plot(all_xs[wd], all_ys[wd], label=fR"$\lambda = {wd}$")
+        add_arrow(line)
+
+    # Add various labels.
+    plt.legend()
+    plt.xscale("log")
+    # plt.yscale("symlog")
+    plt.title(fR"Trajectory with {args.optim} ($\eta = {args.lr}$)")
+    plt.xlabel(R"$\Vert \delta_t \Vert$")
+    plt.ylabel(R"$\theta_t^\top \cdot \delta_t$")
+    plt.ylim(ymin=ymin, ymax=ymax)
+
+    if not os.path.exists("figs/wd"):
+        os.makedirs("figs/wd")
+
+    filename = f"figs/wd/{args.optim}-lr={args.lr}-wd=vary.pdf"
     plt.savefig(filename)
     print(f"Saved [green]{filename}[/green].")
 
