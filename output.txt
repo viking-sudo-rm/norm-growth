@@ -12,3 +12,7 @@ Finished experiment {'optim': <class 'torch.optim.sgd.SGD'>, 'lr': 0.1, 'wd': 1.
 Finished experiment {'optim': <class 'torch.optim.sgd.SGD'>, 'lr': 0.1, 'wd': 1.0000000000000006e-12} in 9.07110843261083.
 Finished experiment {'optim': <class 'torch.optim.sgd.SGD'>, 'lr': 0.1, 'wd': 1.0000000000000007e-13} in 7.268714201450348.
 Finished experiment {'optim': <class 'torch.optim.sgd.SGD'>, 'lr': 0.1, 'wd': 1.0000000000000008e-14} in 7.267178479830424.
+Finished experiment {'optim': <class 'torch.optim.sgd.SGD'>, 'lr': 0.1, 'wd': 1.0000000000000009e-15} in 8.108238673210144.
+Finished experiment {'optim': <class 'torch.optim.sgd.SGD'>, 'lr': 0.1, 'wd': 1.0000000000000008e-16} in 8.127322407563527.
+Finished experiment {'optim': <class 'torch.optim.sgd.SGD'>, 'lr': 0.1, 'wd': 1.000000000000001e-17} in 8.961433080832164.
+Finished experiment {'optim': <class 'torch.optim.sgd.SGD'>, 'lr': 0.1, 'wd': 1.000000000000001e-18} in 9.026092700163524.

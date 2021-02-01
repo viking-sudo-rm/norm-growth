@@ -13,7 +13,6 @@ import os
 import numpy as np
 from math import sqrt
 import tensorflow.compat.v1 as tf
-import matplotlib.pyplot as plt
 import pickle
 import tqdm
 from collections import defaultdict
@@ -23,11 +22,13 @@ from t5.models.mtf_model import MtfModel
 import t5.data
 import gin
 
+PATH = "/net/nfs.corp/allennlp/willm/data/bsl"
+
 
 # MIXTURE_NAME = 'all_mix'
 MIXTURE_NAME = "c4_v020_unsupervised"
 
-CKPT_PATH = "/home/willm/data/bsl/bsl-0/checkpoint"
+CKPT_PATH = f"{PATH}/bsl-0/checkpoint"
 FILE_FORMAT = """model_checkpoint_path: "{ckpt}"
 all_model_checkpoint_paths: "{ckpt}"
 """
@@ -122,7 +123,7 @@ def main(args):
     dir_sims_by_layer = defaultdict(list)
 
     for trial in range(1):
-        model = MtfModel(f"/home/willm/data/bsl/bsl-{trial}/", tpu=None)
+        model = MtfModel(f"{PATH}/bsl-{trial}/", tpu=None)
         gin.parse_config_file(_operative_config_path(model._model_dir))
         vocabulary = t5.data.get_mixture_or_task(MIXTURE_NAME).get_vocabulary()
         ckpts = get_checkpoints(model._model_dir)
@@ -167,60 +168,25 @@ def main(args):
                     dir_sim_ = (param_ @ last_param_) / (norm_ * last_norm_)
                     dir_sims_by_layer[layer].append(dir_sim_)
 
-    plt.figure()
-    plt.plot(ckpt_ids, norms)
-    plt.xlabel("Pretraining checkpoint")
-    plt.ylabel("Parameter norm")
-    plt.title("Aggregate parameter norm")
-    plt.savefig(f"images/t5-norm.png")
-    print("Saved t5-norm figure.")
-
-    hsv = plt.get_cmap('hsv')
-    colors = hsv(np.linspace(0, 0.8, 12))
-
-    plt.figure()
-    for (layer, data), color in zip(norms_by_layer.items(), colors):
-        plt.plot(ckpt_ids, data, label=f"Layer {layer + 1}", color=color)
-    plt.xlabel("Pretraining checkpoint")
-    plt.ylabel("Parameter norm")
-    plt.title("Parameter norm by layer")
-    plt.legend()
-    plt.savefig(f"images/t5-norm-by-layer.png")
-    print("Saved t5-norm-by-layer figure.")
-
-    plt.figure()
-    plt.plot(ckpt_ids[1:], dir_sims, ".")
-    plt.xlabel("Checkpoint $t$")
-    plt.ylabel(R"$\mathrm{cos}(\theta_{t-1}, \theta_{t})$")
-    plt.title("Change in param direction")
-    plt.savefig(f"images/t5-dir.pdf")
-    print("Saved t5-dir figure.")
-
-    plt.figure()
-    for (layer, data), color in zip(dir_sims_by_layer.items(), colors):
-        plt.plot(ckpt_ids[1:], data, ".", label=f"Layer {layer + 1}", color=color)
-    plt.xlabel("Checkpoint $t$")
-    plt.ylabel(R"$\mathrm{cos}(\theta_{t-1}, \theta_{t}$)")
-    plt.title("Change in param direction by layer")
-    plt.legend()
-    plt.savefig(f"images/t5-dir-by-layer.pdf")
-    print("Saved t5-dir-by-layer figure.")
-
-    if args.no_save:
-        return
-
     # Save the norm data, which is expensive to compute.
-    with open(f"/home/willm/data/bsl/t5-deriv/norms.dat", "wb") as fh:
+    with open(f"{PATH}/t5-deriv/norms.dat", "wb") as fh:
         pickle.dump(norms, fh)
-    with open(f"/home/willm/data/bsl/t5-deriv/ckpts.dat", "wb") as fh:
+    with open(f"{PATH}/t5-deriv/ckpts.dat", "wb") as fh:
         pickle.dump(ckpt_ids, fh)
-    with open(f"/home/willm/data/bsl/t5-deriv/norms_by_layer.dat", "wb") as fh:
+    with open(f"{PATH}/t5-deriv/norms_by_layer.dat", "wb") as fh:
         pickle.dump(norms_by_layer, fh)
+    
+    # Save the cosine distance data.
+    with open(f"{PATH}/t5-deriv/dir_sims.dat", "wb") as fh:
+        pickle.dump(dir_sims, fh)
+    with open(f"{PATH}/t5-deriv/dir_sims_by_layer.dat", "wb") as fh:
+        pickle.dump(dir_sims_by_layer, fh)
+    
+    print("Saved all norm and dir sim data.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--samples", default=None, type=int)
-    parser.add_argument("--no_save", action="store_true")
     args = parser.parse_args()
     main(args)
