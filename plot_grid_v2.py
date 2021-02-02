@@ -56,12 +56,11 @@ Ydict = {float(n): i for i, n in enumerate(np.unique(wds))}
 for x, y, z in zip(lrs, wds, dnorms):
     Zsquare[Ydict[float(y)], Xdict[float(x)]] = z
 
-cs = plt.contourf(np.unique(lrs), np.unique(wds), Zsquare)
-# , levels=[-100000.0, 0, 100000.0]
+cs = plt.contourf(np.unique(lrs), np.unique(wds), Zsquare, levels=[-100000.0, 0, 100000.0])
 proxy = [plt.Rectangle((0,0),1,1,fc = pc.get_facecolor()[0]) 
-            for pc in cs.collections]
+           for pc in cs.collections]
 
-# lt.contour(np.unique(lrs), np.unique(wds), Zsquare, levels=[-100000.0, 0, 100000.0], linestyles="-.", colors="black", linewidths=3)
+# plt.contour(np.unique(lrs), np.unique(wds), Zsquare, levels=[-100000.0, 0, 100000.0], linestyles="-.", colors="black", linewidths=3)
 plt.legend(proxy, ["Decreasing norm", "Increasing norm"])
 plt.show()
 

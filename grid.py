@@ -73,6 +73,24 @@ def parse_args():
     return parser.parse_args()
 
 
+@torch.no_grad()
+def get_norm_linear(model):
+    lins = [
+        mod.weight
+        for mod in model.modules()
+        if isinstance(mod, nn.Linear) and mod.weight.requires_grad
+    ]
+    norms = torch.cat([lin.norm(p=2, dim=0) for lin in lins])
+    return norms.mean()
+
+
+@torch.no_grad()
+def get_norm_encoder(model):
+    params = model.encoder.parameters()
+    params = torch.cat([p.flatten() for p in params])
+    return params.norm(p=2).item()
+
+
 def train_model(
     args,
     model,
@@ -117,14 +135,9 @@ def wrapper(optim, lr, wd, device, tokenizer, train_tokens, train_mask):
     log.info(f"Moving model to {device}.")
     model = model.to(device)
 
-    name = f"{optim.__name__}-lr={lr}-wd={wd}"
-    path = os.path.join(SAVE, name)
-    # This was PATH, not SAVE.
-    if not os.path.isdir(path):
-        os.makedirs(path)
-
-    torch.save(model.state_dict(), f"{path}/init.dat")
-    log.info(f"Saved {path}/init.dat.")
+    norms = defaultdict(list)
+    norms["linear"].append(get_norm_linear(model))
+    norms["encoder"].append(get_norm_encoder(model))
 
     log.info(f"Start training on {device}...")
     train_model(
@@ -137,8 +150,9 @@ def wrapper(optim, lr, wd, device, tokenizer, train_tokens, train_mask):
         device=device,
     )
 
-    torch.save(model.state_dict(), f"{path}/final.dat")
-    log.info(f"Saved {path}/final.dat.")
+    norms["linear"].append(get_norm_linear(model))
+    norms["encoder"].append(get_norm_encoder(model))
+    return norms
 
 
 def run_exp(gpu_num, in_queue):
@@ -163,7 +177,14 @@ def run_exp(gpu_num, in_queue):
         lr = experiment["lr"]
         wd = experiment["wd"]
         device = f"cuda:{gpu_num}"
-        wrapper(optim, lr, wd, device, tokenizer, train_tokens, train_mask)
+
+        norms = wrapper(optim, lr, wd, device, tokenizer, train_tokens, train_mask)
+        name = f"{optim.__name__}-lr={lr}-wd={wd}.dat"
+        path = os.path.join(SAVE, name)
+        if not os.path.isdir(SAVE):
+            os.makedirs(SAVE)
+        with open(path, "wb") as fh:
+            pickle.dump(norms, fh)
 
         with open("output.txt", "a+") as f:
             f.write(

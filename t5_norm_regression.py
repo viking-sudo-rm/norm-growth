@@ -3,14 +3,16 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 import argparse
 from rich import print
+import os
 
 PATH = "/net/nfs.corp/allennlp/willm/data/bsl/t5-deriv"
+FIG_PATH = "figs/t5"
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--format", choices=["png", "pdf"], default="pdf")
-    parser.add_argument("--small_font", type=int, default=16)
+    parser.add_argument("--small_font", type=int, default=14)
     parser.add_argument("--large_font", type=int, default=18)
     return parser.parse_args()
 
@@ -41,6 +43,9 @@ print("exp", exp_r2)
 import matplotlib.pyplot as plt
 times = {"fontname": "Times"}
 
+if not os.path.isdir(FIG_PATH):
+    os.makedirs(FIG_PATH)
+
 plt.plot(x, y, ".", label="$\\rho(t)$")
 # plt.plot(x, lin_reg.predict(x), label="$\\hat \\rho(t) = at + b$")
 plt.plot(x, sqrt_reg.predict(np.sqrt(x)), label="$\\hat \\rho(t) = a\\sqrt{t} + b$")
@@ -49,9 +54,9 @@ plt.legend(prop={"size": args.small_font})
 plt.title("Param norm growth with $\\sqrt{\cdot}$ fit", fontsize=args.large_font)
 plt.xlabel("Checkpoint $t$", fontsize=args.small_font)
 plt.ylabel("Param norm $\\rho(t)$", fontsize=args.small_font)
-plt.savefig(f"images/t5-norm.{args.format}")
+plt.savefig(f"{FIG_PATH}/t5-norm.{args.format}")
 
-with open(f"/home/willm/data/bsl/t5-deriv/norms_by_layer.dat", "rb") as fh:
+with open(f"{PATH}/norms_by_layer.dat", "rb") as fh:
     data = pickle.load(fh)
 
 hsv = plt.get_cmap('hsv')
@@ -60,12 +65,39 @@ plt.figure()
 for color, layer in zip(colors, range(12)):
     y = np.array(data[layer]).reshape(-1, 1)
     r2, reg = regress(np.sqrt(x), y)
-    plt.plot(x, y, ".", color=color)
+    plt.plot(x, y, ".", color=color, label=f"Layer {layer + 1}")
     # plt.plot(x, reg.predict(np.sqrt(x)), color=color, label=f"Layer {layer + 1}")
 plt.legend(prop={"size": args.small_font})
 plt.xlabel("Checkpoint $t$", fontsize=args.small_font)
 plt.ylabel("Layer param norm", fontsize=args.small_font)
 plt.title("Param norm growth with $\\sqrt{\cdot}$ fit by layer", fontsize=args.large_font)
-path = f"images/t5-norm-by-layer.{args.format}"
+path = f"{FIG_PATH}/t5-norm-by-layer.{args.format}"
+plt.savefig(path)
+print(f"[green]=>[/green] Saved fig to {path}.")
+
+with open(f"{PATH}/dir_sims.dat", "rb") as fh:
+    dir_sims = pickle.load(fh)
+
+plt.figure()
+plt.plot(x[1:], dir_sims, ".")
+plt.title(R"Param directional similarity", fontsize=args.large_font)
+plt.xlabel("Checkpoint $t$", fontsize=args.small_font)
+plt.ylabel("Cos sim of subsequent checkpoints", fontsize=args.small_font)
+path = f"{FIG_PATH}/t5-dir.{args.format}"
+plt.savefig(path)
+print(f"[green]=>[/green] Saved fig to {path}.")
+
+with open(f"{PATH}/dir_sims_by_layer.dat", "rb") as fh:
+    dir_sims_by_layer = pickle.load(fh)
+
+plt.figure()
+for color, layer in zip(colors, range(12)):
+    y = np.array(dir_sims_by_layer[layer]).reshape(-1, 1)
+    plt.plot(x[1:], y, ".", color=color, label=f"Layer {layer + 1}")
+plt.legend(prop={"size": args.small_font})
+plt.title(R"Param directional similarity by layer", fontsize=args.large_font)
+plt.xlabel("Checkpoint $t$", fontsize=args.small_font)
+plt.ylabel("Cos sim of subsequent checkpoints", fontsize=args.small_font)
+path = f"{FIG_PATH}/t5-dir-by-layer.{args.format}"
 plt.savefig(path)
 print(f"[green]=>[/green] Saved fig to {path}.")
