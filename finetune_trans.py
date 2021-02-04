@@ -57,7 +57,7 @@ def parse_args():
         "--trans", type=str, default="vaswani", choices=["vaswani"] + list(transformers.keys())
     )
     parser.add_argument("--fig_dir", type=str, default="figs/finetune-trans")
-    parser.add_argument("--data_dir", type=str, default="data/finetune-trans")
+    parser.add_argument("--data_dir", type=str, default="/net/nfs.corp/allennlp/willm/models/finetune-trans")
     parser.add_argument("--no_bias", action="store_true")
     parser.add_argument("--data", choices=["wikitext-2", "penn"], default="wikitext-2")
     return parser.parse_args()

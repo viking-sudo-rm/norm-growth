@@ -20,6 +20,8 @@ from src.utils import pad_sequence_to_len, get_mask
 
 
 PATH = "/net/nfs.corp/allennlp/willm/data"
+MODELS = "/net/nfs.corp/allennlp/willm/models"
+CACHED = "/net/nfs.corp/allennlp/willm/cached"
 
 log = logging.getLogger("rich")
 
@@ -46,13 +48,15 @@ def parse_args():
     parser.add_argument("--data", choices=["wikitext-2", "penn"], default="wikitext-2")
     
     parser.add_argument("--load", action="store_true")
+    parser.add_argument("--n_samples", type=int, default=200)
     return parser.parse_args()
 
 
 class AttnTracker:
 
-    def __init__(self):
+    def __init__(self, cpu=True):
         self.attns = {}
+        self.cpu = cpu
 
     def forward_hook(self, net, inputs, outputs):
         encodings = inputs[0]
@@ -70,13 +74,14 @@ class AttnTracker:
             scores = mask.unsqueeze(dim=0) * scores
 
         weights = net.softmax(scores)
+        if self.cpu:
+            weights = weights.cpu()
         self.attns[net.__name__] = weights
 
 
 args = parse_args()
 
 if not args.load:
-
     tokenizer = Tokenizer()
 
     log.info(f"Loading train data from {PATH}/{args.data}/train.txt...")
@@ -100,7 +105,7 @@ if not args.load:
         bias=not args.no_bias,
     )
 
-    model_path = f"data/finetune-trans/{args.data}/{args.trans}.pt"
+    model_path = f"{MODELS}/finetune-trans/{args.data}/{args.trans}.pt"
     dev = torch.device("cpu") if not torch.cuda.is_available() else torch.device("cuda:0")
     model.to(dev)
     state_dict = torch.load(model_path, map_location=dev)
@@ -115,19 +120,23 @@ if not args.load:
             mod.register_forward_hook(tracker.forward_hook)
 
     with saturate(model):
-        tokens = dev_tokens[:200, :].clone()
+        tokens = dev_tokens[:args.n_samples, :].clone()
         tokens = tokens.to(dev)
         # Now the attention distribution should be recorded in the tracker.
         model(tokens)
 
-    with open("data/attn/dev.dat", "wb") as fh:
+    path = os.path.join(CACHED, "attn")
+    if not os.path.isdir(path):
+        os.makedirs(path)
+    with open(f"{path}/dev.dat", "wb") as fh:
         pickle.dump(tracker.attns, fh)
         print("Saved attention data.")
     attns = tracker.attns
 
 else:
     print("Loading from pickle file...")
-    with open("data/attn/dev.dat", "rb") as fh:
+    path = os.path.join(CACHED, "attn")
+    with open(f"{path}/dev.dat", "rb") as fh:
         attns = pickle.load(fh)
 
 metrics = defaultdict(dict)
@@ -138,7 +147,8 @@ for name, tensor in attns.items():
     metrics["# positions attended"][name] = nonzero.mean().item()
 
 fig_dir = f"figs/attn/{args.data}/{args.trans}"
-os.makedirs(fig_dir)
+if not os.path.isdir(fig_dir):
+    os.makedirs(fig_dir)
 log.info(f"Made {fig_dir}.")
 
 title = "pre-norm" if args.trans == "pre_norm" else "post-norm"

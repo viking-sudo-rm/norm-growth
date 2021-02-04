@@ -81,7 +81,7 @@ def get_norm_linear(model):
         if isinstance(mod, nn.Linear) and mod.weight.requires_grad
     ]
     norms = torch.cat([lin.norm(p=2, dim=0) for lin in lins])
-    return norms.mean()
+    return norms.mean().item()
 
 
 @torch.no_grad()
