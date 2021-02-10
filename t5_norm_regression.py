@@ -62,7 +62,8 @@ with open(f"{PATH}/norms_by_layer.dat", "rb") as fh:
 hsv = plt.get_cmap('hsv')
 colors = hsv(np.linspace(0, 0.8, 12))
 plt.figure()
-for color, layer in zip(colors, range(12)):
+layers = reversed(range(12))
+for color, layer in zip(colors, layers):
     y = np.array(data[layer]).reshape(-1, 1)
     r2, reg = regress(np.sqrt(x), y)
     plt.plot(x, y, ".", color=color, label=f"Layer {layer + 1}")
@@ -91,7 +92,8 @@ with open(f"{PATH}/dir_sims_by_layer.dat", "rb") as fh:
     dir_sims_by_layer = pickle.load(fh)
 
 plt.figure()
-for color, layer in zip(colors, range(12)):
+layers = reversed(range(12))
+for color, layer in zip(colors, layers):
     y = np.array(dir_sims_by_layer[layer]).reshape(-1, 1)
     plt.plot(x[1:], y, ".", color=color, label=f"Layer {layer + 1}")
 plt.legend(prop={"size": args.small_font})

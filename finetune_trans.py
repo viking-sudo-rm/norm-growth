@@ -26,7 +26,13 @@ from src.language_model import transformers, LanguageModel
 from src.tokenizer import Tokenizer
 from src.utils import pad_sequence_to_len, get_mask
 
-PATH = "/net/nfs.corp/allennlp/willm/data"
+
+DATA = os.getenv("DATA")
+assert os.path.isdir(str(DATA)), f"Could not find data folder: {DATA}"
+PATH = DATA
+MODELS = os.getenv("MODELS")
+assert os.path.isdir(str(MODELS)), f"Could not find models folder: {MODELS}"
+
 
 logging.basicConfig(
     level="NOTSET",
@@ -57,7 +63,7 @@ def parse_args():
         "--trans", type=str, default="vaswani", choices=["vaswani"] + list(transformers.keys())
     )
     parser.add_argument("--fig_dir", type=str, default="figs/finetune-trans")
-    parser.add_argument("--data_dir", type=str, default="/net/nfs.corp/allennlp/willm/models/finetune-trans")
+    parser.add_argument("--data_dir", type=str, default=f"{MODELS}/finetune-trans")
     parser.add_argument("--no_bias", action="store_true")
     parser.add_argument("--data", choices=["wikitext-2", "penn"], default="wikitext-2")
     return parser.parse_args()

@@ -14,7 +14,11 @@ from src.loss import sequence_cross_entropy_with_logits
 from src.saturate import saturate
 
 
-PATH = "/net/nfs.corp/allennlp/willm/data"
+DATA = os.getenv("DATA")
+assert os.path.isdir(str(DATA)), f"Could not find data folder: {DATA}"
+PATH = PATH
+MODELS = os.getenv("MODELS")
+assert os.path.isdir(str(MODELS)), f"Could not find models folder: {MODELS}"
 
 
 logging.basicConfig(
@@ -46,7 +50,7 @@ def parse_args():
         "--trans", type=str, default="vaswani", choices=["vaswani"] + list(transformers.keys())
     )
     parser.add_argument("--fig_dir", type=str, default="figs/finetune-trans")
-    parser.add_argument("--data_dir", type=str, default="data/finetune-trans")
+    parser.add_argument("--data_dir", type=str, default=f"{MODELS}/finetune-trans")
     parser.add_argument("--no_bias", action="store_true")
     parser.add_argument("--data", choices=["wikitext-2", "penn"], default="wikitext-2")
     return parser.parse_args()

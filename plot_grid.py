@@ -8,7 +8,8 @@ import re
 import argparse
 
 
-SAVE = "/net/nfs.corp/allennlp/willm/cached"
+SAVE = os.getenv("CACHED")
+assert os.path.isdir(str(SAVE)), f"Could not find data folder: {SAVE}"
 
 
 def parse_args():

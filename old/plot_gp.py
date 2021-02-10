@@ -44,7 +44,7 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--wd", type=float, default=0.)
     parser.add_argument("--window", type=int, default=100)
-    parser.add_argument("--data_dir", type=str, default="/net/nfs.corp/allennlp/willm/cached")
+    parser.add_argument("--data_dir", type=str, default="cache")
     return parser.parse_args()
 
 

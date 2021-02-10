@@ -6,8 +6,6 @@ gsutil -m cp -r gs://t5-data/pretrained_models/ data/t5-models
 But also, this should work if you set INIT_CHECKPONT to a GCP path.
 """
 
-# NLP IS SO WEIRD EVERYONE KNOWS T5 IS A TERMINATOR -> https://terminator.fandom.com/wiki/T-5000
-
 from typing import Iterable
 import os
 import numpy as np
@@ -22,7 +20,10 @@ from t5.models.mtf_model import MtfModel
 import t5.data
 import gin
 
-PATH = "/net/nfs.corp/allennlp/willm/data/bsl"
+
+DATA = os.getenv("DATA")
+assert os.path.isdir(str(DATA)), f"Could not find data folder: {DATA}"
+PATH = f"{DATA}/bsl"
 
 
 # MIXTURE_NAME = 'all_mix'

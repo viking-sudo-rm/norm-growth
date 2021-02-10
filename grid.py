@@ -28,9 +28,13 @@ from src.language_model import transformers, LanguageModel
 from src.tokenizer import Tokenizer
 from src.utils import pad_sequence_to_len, get_mask
 
+DATA = os.getenv("DATA")
+assert os.path.isdir(str(DATA)), f"Could not find data folder: {DATA}"
+MODELS = os.getenv("MODELS")
+assert os.path.isdir(str(MODELS)), f"Could not find models folder: {MODELS}"
 
-PATH = "/net/nfs.corp/allennlp/willm/data"
-SAVE = "/net/nfs.corp/allennlp/willm/models/grid"
+PATH = DATA
+SAVE = f"{MODELS}/grid"
 
 optims = {
     "SGD": torch.optim.SGD,

@@ -15,7 +15,6 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--optim", default="SGD", choices=["SGD", "AdamW"])
     parser.add_argument("--data_dir", type=str, default="grid-norms")
-    parser.add_argument("--norm-type", type=str, default=None, choices=["linear", "encoder"])
     return parser.parse_args()
 
 
@@ -35,7 +34,7 @@ for name in os.listdir(data_path):
     with open(os.path.join(data_path, name), "rb") as fh:
         norms = pickle.load(fh)
 
-    dnorm = norms[args.norm_type][-1] - norms[args.norm_type][0]
+    dnorm = norms[-1] - norms[0]
 
     if optim == args.optim:
         lrs.append(lr)
@@ -57,16 +56,13 @@ Ydict = {float(n): i for i, n in enumerate(np.unique(wds))}
 for x, y, z in zip(lrs, wds, dnorms):
     Zsquare[Ydict[float(y)], Xdict[float(x)]] = z
 
-cs = plt.contourf(np.unique(lrs), np.unique(wds), Zsquare, levels=[-100000.0, 0, 100000.0])
+cs = plt.contourf(np.unique(lrs), np.unique(wds), Zsquare)
+# , levels=[-100000.0, 0, 100000.0]
 proxy = [plt.Rectangle((0,0),1,1,fc = pc.get_facecolor()[0]) 
-           for pc in cs.collections]
+            for pc in cs.collections]
 
-plt.contour(np.unique(lrs), np.unique(wds), Zsquare, levels=[-100000.0, 0, 100000.0], linestyles="-.", colors="black", linewidths=3)
-if args.optim == "AdamW":
-    # Plot pytorch default
-    k = plt.scatter(0.001, 0.01, marker="^", color="orange", s=80, label="Default")
-    proxy.append(k)
-plt.legend(proxy, ["Decreasing norm", "Increasing norm", "PyTorch default"], loc="lower right", fontsize=16)
+# lt.contour(np.unique(lrs), np.unique(wds), Zsquare, levels=[-100000.0, 0, 100000.0], linestyles="-.", colors="black", linewidths=3)
+plt.legend(proxy, ["Decreasing norm", "Increasing norm"])
 plt.show()
 
 # sc = plt.scatter(lrs, wds, c=dnorms)
@@ -76,6 +72,6 @@ plt.xlabel(R"$\eta$")
 plt.ylabel(R"$\lambda$")
 plt.xscale("log")
 plt.yscale("log")
-plt.savefig(f"/home/vivekr/figs/grid/{args.optim}-{args.norm_type}.pdf", bbox_inches="tight")
+plt.savefig(f"/home/vivekr/figs/grid/{args.optim}.pdf")
 
 # contourf, pcolormesh?
