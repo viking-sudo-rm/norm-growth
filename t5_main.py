@@ -127,7 +127,7 @@ def main(args):
 
     for trial in range(1):
         model = MtfModel(f"{PATH}/bsl-{trial}/", tpu=None)
-        gin.parse_config_file(_operative_config_path(model._model_dir))
+        # gin.parse_config_file(_operative_config_path(model._model_dir))
         vocabulary = t5.data.get_mixture_or_task(MIXTURE_NAME).get_vocabulary()
         ckpts = get_checkpoints(model._model_dir)
         if args.samples is not None:
@@ -179,7 +179,7 @@ def main(args):
                     last_norm_ = norms_by_layer[layer][-2]
                     numerator_ = param_ @ last_param_ - last_norm_ * last_norm_
                     denominator_ = np.norm(param_ - last_norm_) * last_norm_
-                    alignment_ = numerator / denominator
+                    alignment_ = numerator_ / denominator_
                     alignments_by_layer[layer].append(alignment_)
 
     # Save the norm data, which is expensive to compute.
