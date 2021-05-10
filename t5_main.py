@@ -122,6 +122,8 @@ def main(args):
     last_param_layer, param_layer = [None for _ in range(12)], [None for _ in range(12)]
     dir_sims = []
     dir_sims_by_layer = defaultdict(list)
+    alignments = []
+    alignments_by_layer = defaultdict(list)
 
     for trial in range(1):
         model = MtfModel(f"{PATH}/bsl-{trial}/", tpu=None)
@@ -168,8 +170,19 @@ def main(args):
                     last_norm_ = norms_by_layer[layer][-2]
                     dir_sim_ = (param_ @ last_param_) / (norm_ * last_norm_)
                     dir_sims_by_layer[layer].append(dir_sim_)
+                
+                numerator = param @ last_param - norms[-2] * norms[-2]
+                denominator = np.norm(param - last_param) * norms[-2]
+                alignment = numerator / denominator
+                alignments.append(alignment)
+                for layer, (param_, last_param_) in enumerate(zip(param_layer, last_param_layer)):
+                    last_norm_ = norms_by_layer[layer][-2]
+                    numerator_ = param_ @ last_param_ - last_norm_ * last_norm_
+                    denominator_ = np.norm(param_ - last_norm_) * last_norm_
+                    alignment_ = numerator / denominator
+                    alignments_by_layer[layer].append(alignment_)
 
-    Save the norm data, which is expensive to compute.
+    # Save the norm data, which is expensive to compute.
     with open(f"{PATH}/t5-deriv/norms.dat", "wb") as fh:
         pickle.dump(norms, fh)
     with open(f"{PATH}/t5-deriv/ckpts.dat", "wb") as fh:

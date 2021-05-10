@@ -18,6 +18,9 @@ import pickle
 import os
 from torch.autograd import grad
 
+from transformers.optimization import Adafactor
+
+from schedulers import get_policy
 from src.norm_sgd import NormSGD
 from src.saturate import saturate
 from src.loss import sequence_cross_entropy_with_logits
@@ -44,6 +47,14 @@ logging.basicConfig(
 log = logging.getLogger("rich")
 
 
+optims = {
+    "sgd": optim.SGD,
+    "adam": optim.Adam,
+    "adamw": optim.AdamW,
+    "adafactor": Adafactor,
+}
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, default=16)
@@ -56,6 +67,7 @@ def parse_args():
     parser.add_argument("--d_ff", type=int, default=512)
     parser.add_argument("--n_heads", type=int, default=12)
     parser.add_argument("--n_layers", type=int, default=12)
+    parser.add_argument("--lr", type=float, default=1e-2)
     parser.add_argument("--fine_lr", type=float, default=1e-1)
     parser.add_argument("--pre_epochs", type=int, default=5)
     parser.add_argument("--fine_epochs", type=int, default=0)
@@ -66,18 +78,29 @@ def parse_args():
     parser.add_argument("--data_dir", type=str, default=f"{MODELS}/finetune-trans")
     parser.add_argument("--no_bias", action="store_true")
     parser.add_argument("--data", choices=["wikitext-2", "penn"], default="wikitext-2")
+    parser.add_argument("--optim", choices=optims.keys(), default="adamw")
+    parser.add_argument("--sched", choices=["constant_lr", "linear_lr", "sqrt_lr"], default="constant_lr")
+    parser.add_argument("--stop_iteration", type=int, default=1000)  # End of constant LR warmup
+    parser.add_argument("--batch_metrics", type=int, default=None)
+
     return parser.parse_args()
 
 
 @torch.no_grad()
 def get_norm(model):
-    lins = [
-        mod.weight
-        for mod in model.modules()
-        if isinstance(mod, nn.Linear) and mod.weight.requires_grad
-    ]
-    norms = torch.cat([lin.norm(p=2, dim=0) for lin in lins])
-    return norms.mean()
+    # Use the same norm as for T5.
+    params = [p for p in model.parameters() if p.requires_grad]
+    params = [p for p in params if len(p.shape) > 0]
+    return torch.cat([p.flatten() for p in params]).norm(p=2)
+
+    # lins = [
+    #     mod.weight
+    #     for mod in model.modules()
+    #     if isinstance(mod, nn.Linear) and mod.weight.requires_grad
+    # ]
+    # norms = torch.cat([lin.norm(p=2, dim=0) for lin in lins])
+    # return norms.mean()
+
     # params = [p for p in model.parameters() if p.requires_grad and p.grad is not None]
     # return torch.cat([p.flatten() for p in params]).norm(p=2)
 
@@ -163,7 +186,10 @@ def train_model(
     epochs=10,
     record_init=False,
     device="cuda:0",
+    scheduler: str = None,
+    max_iterations = None,
 ):
+    batch_timeseries = defaultdict(list)
     timeseries = defaultdict(list)
     if record_init:
         metrics = get_metrics(args, model, dev_tokens, dev_mask)
@@ -173,7 +199,11 @@ def train_model(
 
     best_loss = float("inf")
 
+    lr_adjuster = get_policy(scheduler)(optimizer, args, max_iterations=max_iterations)
+
+    iteration = 0
     for e in range(epochs):
+
         model.train()
         log.info(f"Starting epoch {e}...")
         perm = torch.randperm(len(train_tokens))
@@ -181,6 +211,15 @@ def train_model(
         train_mask = train_mask[perm, :]
 
         for b in tqdm.trange(0, len(train_tokens) - args.batch_size, args.batch_size):
+            cur_lr = lr_adjuster(e, iteration)
+
+            if args.batch_metrics is not None and iteration % args.batch_metrics == 0:
+                norm = get_norm(model).item()
+                batch_timeseries["step"].append(iteration)
+                batch_timeseries["norm"].append(norm)
+                batch_timeseries["lr"].append(cur_lr)
+
+            tqdm.tqdm.write(f"i={iteration}, lr={cur_lr}", end="\r")
             batch_tokens = train_tokens[b : b + args.batch_size].to(device)
             batch_mask = train_mask[b : b + args.batch_size].to(device)
             optimizer.zero_grad()
@@ -190,6 +229,7 @@ def train_model(
             )
             loss.backward()
             optimizer.step()
+            iteration += 1
 
         model.eval()
         metrics = get_metrics(args, model, dev_tokens, dev_mask, device=device)
@@ -204,7 +244,7 @@ def train_model(
             ckpt_path = os.path.join(data_dir, args.trans + ".pt")
             torch.save(model.state_dict(), ckpt_path)
 
-    return timeseries
+    return timeseries, batch_timeseries
 
 
 def main(args):
@@ -220,7 +260,6 @@ def main(args):
     train_len = max(len(s) for s in raw_train)
     assert train_len <= args.seq_len
     log.info(f"Max train sentence length is {train_len} (<= {args.seq_len}).")
-    quit()
 
     log.info(f"Loading dev data from {PATH}/{args.data}/valid.txt...")
     raw_dev = list(tokenizer.gen_tokens(f"{PATH}/{args.data}/valid.txt"))
@@ -229,6 +268,9 @@ def main(args):
     dev_len = max(len(s) for s in raw_dev)
     assert dev_len <= args.seq_len
     log.info(f"Max dev sentence length is {dev_len} (<= {args.seq_len}).")
+
+    # Maximum number of training steps, used for linearly decaying learning rate schedule.
+    max_iterations = len(raw_train) // args.batch_size * args.pre_epochs
 
     model = LanguageModel(
         d_model=args.d_model,
@@ -248,20 +290,24 @@ def main(args):
 
     if args.half:
         model = model.half()
+    
+    opt = optims[args.optim]
 
-    all_series["pre"] = train_model(
+    all_series["pre"], batch_data = train_model(
         args,
         model,
         train_tokens,
         train_mask,
         dev_tokens,
         dev_mask,
-        optim.AdamW(model.parameters()),
+        opt(model.parameters(), lr=args.lr),
         epochs=args.pre_epochs,
         record_init=True,
+        scheduler=args.sched,
+        max_iterations=max_iterations,
     )
     # TODO: Should we try varying the learning rate from this checkpoint?
-    all_series["fine"] = train_model(
+    all_series["fine"], batch_data_fine = train_model(
         args,
         model,
         train_tokens,
@@ -279,15 +325,20 @@ def main(args):
     data_dir = os.path.join(args.data_dir, args.data)
     if not os.path.isdir(data_dir):
         os.makedirs(data_dir)
+    filename = f"{args.trans}-{args.optim}-{args.sched}"
 
-    data_path = os.path.join(data_dir, args.trans + ".dat")
+    data_path = os.path.join(data_dir, filename + ".dat")
     with open(data_path, "wb") as fh:
         pickle.dump(all_series, fh)
     
-    ckpt_path = os.path.join(data_dir, args.trans + ".pt")
+    data_path = os.path.join(data_dir, f"{filename}-batch_data.dat")
+    with open(data_path, "wb") as fh:
+        pickle.dump(batch_data, fh)
+    
+    ckpt_path = os.path.join(data_dir, f"{filename}.pt")
     torch.save(model.state_dict(), ckpt_path)
 
-    fig_dir = os.path.join(args.fig_dir, args.data, args.trans)
+    fig_dir = os.path.join(args.fig_dir, args.data, filename)
     if not os.path.isdir(fig_dir):
         os.makedirs(fig_dir)
 

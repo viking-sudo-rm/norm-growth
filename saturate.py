@@ -19,9 +19,9 @@ from src.language_model import LanguageModel, transformers
 from src.utils import pad_sequence_to_len, get_mask
 
 
-PATH = "/net/nfs.corp/allennlp/willm/data"
-MODELS = "/net/nfs.corp/allennlp/willm/models"
-CACHED = "/net/nfs.corp/allennlp/willm/cached"
+PATH = os.environ["DATA"]
+MODELS = os.environ["MODEL"]
+CACHED = os.environ["CACHED"]
 
 log = logging.getLogger("rich")
 

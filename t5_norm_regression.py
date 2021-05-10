@@ -5,7 +5,8 @@ import argparse
 from rich import print
 import os
 
-PATH = "/net/nfs.corp/allennlp/willm/data/bsl/t5-deriv"
+DATA = os.getenv("DATA")
+PATH = f"{DATA}/bsl/t5-deriv"
 FIG_PATH = "figs/t5"
 
 
@@ -35,10 +36,12 @@ def regress(x, y):
 lin_r2, lin_reg = regress(x, y)
 sqrt_r2, sqrt_reg = regress(np.sqrt(x), y)
 exp_r2, exp_reg = regress(np.exp(-x), y)
+root4_r2, root4_reg = regress(np.sqrt(np.sqrt(x)), y)
 
 print("lin", lin_r2)
 print("sqrt", sqrt_r2)
 print("exp", exp_r2)
+print("root4", root4_r2)
 
 import matplotlib.pyplot as plt
 times = {"fontname": "Times"}
