@@ -127,7 +127,7 @@ def main(args):
 
     for trial in range(1):
         model = MtfModel(f"{PATH}/bsl-{trial}/", tpu=None)
-        # gin.parse_config_file(_operative_config_path(model._model_dir))
+        gin.parse_config_file(_operative_config_path(model._model_dir))
         vocabulary = t5.data.get_mixture_or_task(MIXTURE_NAME).get_vocabulary()
         ckpts = get_checkpoints(model._model_dir)
         if args.samples is not None:
