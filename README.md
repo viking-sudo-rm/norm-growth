@@ -65,7 +65,9 @@ python grid.py --data=penn --seq_len=83
 
 ### Saturation in pretrained transformers
 
-TODO
+```shell
+python eval_pretrain_sat_brown.py
+```
 
 ### Saturated attention heads
 
