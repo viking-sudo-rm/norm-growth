@@ -1,4 +1,6 @@
-# Code for Transnormer paper
+# Code for transformer norm growth paper
+
+https://arxiv.org/abs/2010.09697
 
 ## Setup
 
