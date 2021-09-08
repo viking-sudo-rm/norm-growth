@@ -24,17 +24,12 @@ import gin
 DATA = os.getenv("DATA")
 assert os.path.isdir(str(DATA)), f"Could not find data folder: {DATA}"
 PATH = f"{DATA}/bsl"
-
-
 # MIXTURE_NAME = 'all_mix'
 MIXTURE_NAME = "c4_v020_unsupervised"
-
 CKPT_PATH = f"{PATH}/bsl-0/checkpoint"
 FILE_FORMAT = """model_checkpoint_path: "{ckpt}"
 all_model_checkpoint_paths: "{ckpt}"
 """
-
-FILTER_PRED = lambda name: name.startswith("shared/")
 
 
 def get_checkpoints(model_dir):
@@ -70,11 +65,7 @@ def _fan_in(shape) -> int:
 
 
 def get_param_names(estimator):
-    return [
-        p
-        for p in estimator.get_variable_names()
-        if not FILTER_PRED(p)
-    ]
+    return [p for p in estimator.get_variable_names() if p.startswith("encoder/")]
 
 
 def filter_by_layer(param_names, layer_num: int):
@@ -82,34 +73,26 @@ def filter_by_layer(param_names, layer_num: int):
     return [p for p in param_names if p.startswith(expr)]
 
 
-def get_param_norm(params: Iterable[np.ndarray], normalize: bool = False):
+def get_param_norm(params: Iterable[np.ndarray], normalize: bool = False, min: bool = False):
     # There are weird scalars in here, which we filter out.
-    values = [v for v in params if len(v.shape) > 0]
-    if normalize:
-        values = [value / sqrt(_fan_in(value.shape)) for value in values]
-    flat = np.concatenate([value.flatten() for value in values])
-    norm = np.linalg.norm(flat)
-    return norm
+    values = [v for v in params if len(v.shape) > 0]    
+    if min:
+        # Take the linear transformation in the network with the least norm.
+        values = [v / np.sqrt(v.size) for v in values if len(v.shape) == 2]
+        norms = [np.linalg.norm(v) for v in values]
+        return np.min(norms)
+    else:
+        # This is the 2-norm.
+        if normalize:
+            values = [value / sqrt(_fan_in(value.shape)) for value in values]
+        flat = np.concatenate([value.flatten() for value in values])
+        norm = np.linalg.norm(flat)
+        return norm
 
 
 def get_param(params: Iterable[np.ndarray]):
     values = [v for v in params if len(v.shape) > 0]
     return np.concatenate([value.flatten() for value in values])
-
-
-def get_all_norms_normalized_WRONG(estimator):
-    """FIXME: No sqrt boi."""
-    params = [
-        estimator.get_variable_value(p)
-        for p in estimator.get_variable_names()
-        if not FILTER_PRED(p)
-    ]
-    batched_norms = [
-        np.linalg.norm(param, axis=1) / param.shape[1]
-        for param in params
-        if hasattr(param, "shape") and len(param.shape) == 2
-    ]
-    return [item for sublist in batched_norms for item in sublist]
 
 
 def main(args):
@@ -125,75 +108,83 @@ def main(args):
     alignments = []
     alignments_by_layer = defaultdict(list)
 
-    for trial in range(1):
-        model = MtfModel(f"{PATH}/bsl-{trial}/", tpu=None)
-        gin.parse_config_file(_operative_config_path(model._model_dir))
-        vocabulary = t5.data.get_mixture_or_task(MIXTURE_NAME).get_vocabulary()
-        ckpts = get_checkpoints(model._model_dir)
-        if args.samples is not None:
-            ckpts = list(downsample(ckpts, samples=args.samples))
+    model = MtfModel(f"{PATH}/bsl-{args.n}/", tpu=None)
+    gin.parse_config_file(_operative_config_path(model._model_dir))
+    vocabulary = t5.data.get_mixture_or_task(MIXTURE_NAME).get_vocabulary()
+    ckpts = get_checkpoints(model._model_dir)
+    if args.samples is not None:
+        ckpts = list(downsample(ckpts, samples=args.samples))
 
-        for n, ckpt in enumerate(tqdm.tqdm(ckpts)):
-            print(f"Starting ckpt {ckpt}...")
-            ckpt_id = int(ckpt.split("-")[1])
-            ckpt_ids.append(ckpt_id)
-            write_checkpoint_file(ckpt)
+    for n, ckpt in enumerate(tqdm.tqdm(ckpts)):
+        print(f"Starting ckpt {ckpt}...")
+        ckpt_id = int(ckpt.split("-")[1])
+        ckpt_ids.append(ckpt_id)
+        write_checkpoint_file(ckpt)
 
-            estimator = model.estimator(vocabulary, init_checkpoint=ckpt)
-            param_names = get_param_names(estimator)
+        estimator = model.estimator(vocabulary, init_checkpoint=ckpt)
+        param_names = get_param_names(estimator)
 
-            values = (estimator.get_variable_value(p) for p in param_names)
-            norm = get_param_norm(values, normalize=False)
-            norms.append(norm)
+        values = (estimator.get_variable_value(p) for p in param_names)
+        norm = get_param_norm(values, normalize=False, min=args.min)
+        norms.append(norm)
+
+        if not args.min:
             print(f"({n}/{len(ckpts)}) norm({ckpt_id}) = {norm:.0f}")
+        else:
+            print(f"({n}/{len(ckpts)}) norm({ckpt_id}) = {norm:.10f}")
 
-            for layer in range(12):
-                layer_params = filter_by_layer(param_names, layer)
-                values = (estimator.get_variable_value(p) for p in layer_params)
-                norm = get_param_norm(values, normalize=False)
-                norms_by_layer[layer].append(norm)
+        for layer in range(12):
+            layer_params = filter_by_layer(param_names, layer)
+            values = (estimator.get_variable_value(p) for p in layer_params)
+            norm = get_param_norm(values, normalize=False, min=args.min)
+            norms_by_layer[layer].append(norm)
+        
+        last_param = param
+        values = (estimator.get_variable_value(p) for p in param_names)
+        param = get_param(values)
+        for layer in range(12):
+            last_param_layer[layer] = param_layer[layer]
+            layer_params = filter_by_layer(param_names, layer)
+            values = (estimator.get_variable_value(p) for p in layer_params)
+            param_layer[layer] = get_param(values)
+
+        if last_param is not None:
+            dir_sim = (param @ last_param) / (norms[-1] * norms[-2])
+            dir_sims.append(dir_sim)
+            for layer, (param_, last_param_) in enumerate(zip(param_layer, last_param_layer)):
+                norm_ = norms_by_layer[layer][-1]
+                last_norm_ = norms_by_layer[layer][-2]
+                dir_sim_ = (param_ @ last_param_) / (norm_ * last_norm_)
+                dir_sims_by_layer[layer].append(dir_sim_)
             
-            last_param = param
-            values = (estimator.get_variable_value(p) for p in param_names)
-            param = get_param(values)
-            for layer in range(12):
-                last_param_layer[layer] = param_layer[layer]
-                layer_params = filter_by_layer(param_names, layer)
-                values = (estimator.get_variable_value(p) for p in layer_params)
-                param_layer[layer] = get_param(values)
+            numerator = param @ last_param - norms[-2] * norms[-2]
+            denominator = np.linalg.norm(param - last_param) * norms[-2]
+            alignment = numerator / denominator
+            alignments.append(alignment)
+            for layer, (param_, last_param_) in enumerate(zip(param_layer, last_param_layer)):
+                last_norm_ = norms_by_layer[layer][-2]
+                numerator_ = param_ @ last_param_ - last_norm_ * last_norm_
+                denominator_ = np.linalg.norm(param_ - last_norm_) * last_norm_
+                alignment_ = numerator_ / denominator_
+                alignments_by_layer[layer].append(alignment_)
 
-            if last_param is not None:
-                dir_sim = (param @ last_param) / (norms[-1] * norms[-2])
-                dir_sims.append(dir_sim)
-                for layer, (param_, last_param_) in enumerate(zip(param_layer, last_param_layer)):
-                    norm_ = norms_by_layer[layer][-1]
-                    last_norm_ = norms_by_layer[layer][-2]
-                    dir_sim_ = (param_ @ last_param_) / (norm_ * last_norm_)
-                    dir_sims_by_layer[layer].append(dir_sim_)
-                
-                numerator = param @ last_param - norms[-2] * norms[-2]
-                denominator = np.norm(param - last_param) * norms[-2]
-                alignment = numerator / denominator
-                alignments.append(alignment)
-                for layer, (param_, last_param_) in enumerate(zip(param_layer, last_param_layer)):
-                    last_norm_ = norms_by_layer[layer][-2]
-                    numerator_ = param_ @ last_param_ - last_norm_ * last_norm_
-                    denominator_ = np.norm(param_ - last_norm_) * last_norm_
-                    alignment_ = numerator_ / denominator_
-                    alignments_by_layer[layer].append(alignment_)
+    # Create the path for saving data.
+    path = f"{PATH}/t5-deriv/norm-{args.n}" if not args.min else f"{PATH}/t5-deriv/min-{args.n}"
+    if not os.path.isdir(path):
+        os.makedirs(path)
 
     # Save the norm data, which is expensive to compute.
-    with open(f"{PATH}/t5-deriv/norms.dat", "wb") as fh:
+    with open(f"{path}/norms.dat", "wb") as fh:
         pickle.dump(norms, fh)
-    with open(f"{PATH}/t5-deriv/ckpts.dat", "wb") as fh:
+    with open(f"{path}/ckpts.dat", "wb") as fh:
         pickle.dump(ckpt_ids, fh)
-    with open(f"{PATH}/t5-deriv/norms_by_layer.dat", "wb") as fh:
+    with open(f"{path}/norms_by_layer.dat", "wb") as fh:
         pickle.dump(norms_by_layer, fh)
     
     # Save the cosine distance data.
-    with open(f"{PATH}/t5-deriv/dir_sims.dat", "wb") as fh:
+    with open(f"{path}/dir_sims.dat", "wb") as fh:
         pickle.dump(dir_sims, fh)
-    with open(f"{PATH}/t5-deriv/dir_sims_by_layer.dat", "wb") as fh:
+    with open(f"{path}/dir_sims_by_layer.dat", "wb") as fh:
         pickle.dump(dir_sims_by_layer, fh)
     
     print("Saved all norm and dir sim data.")
@@ -201,6 +192,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--min", action="store_true")
+    parser.add_argument("-n", type=int, default=0)
     parser.add_argument("--samples", default=None, type=int)
     args = parser.parse_args()
     main(args)

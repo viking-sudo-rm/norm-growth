@@ -15,10 +15,13 @@ def parse_args():
     parser.add_argument("--format", choices=["png", "pdf"], default="pdf")
     parser.add_argument("--small_font", type=int, default=14)
     parser.add_argument("--large_font", type=int, default=18)
+    parser.add_argument("-n", type=int, default=0)
+    parser.add_argument("--min", action="store_true")
     return parser.parse_args()
 
 
 args = parse_args()
+PATH += f"/min-{args.n}" if args.min else f"/norm-{args.n}"
 
 with open(f"{PATH}/norms.dat", "rb") as fh:
     y = pickle.load(fh)
@@ -54,10 +57,13 @@ plt.plot(x, y, ".", label="$\\rho(t)$")
 plt.plot(x, sqrt_reg.predict(np.sqrt(x)), label="$\\hat \\rho(t) = a\\sqrt{t} + b$")
 # plt.plot(x, sqrt_reg.predict(np.exp(-x)), label="$\\hat \\rho(t) = a\\exp(-t) + b$")
 plt.legend(prop={"size": args.small_font})
-plt.title("Param norm growth with $\\sqrt{\cdot}$ fit", fontsize=args.large_font)
+# plt.title("Param growth with $\\sqrt{\cdot}$ fit", fontsize=args.large_font)
 plt.xlabel("Checkpoint $t$", fontsize=args.small_font)
-plt.ylabel("Param norm $\\rho(t)$", fontsize=args.small_font)
-plt.savefig(f"{FIG_PATH}/t5-norm.{args.format}")
+plt.ylabel(R"Min parameter magnitude" if args.min else "Parameter norm", fontsize=args.small_font)
+plt.tight_layout()
+path = f"{FIG_PATH}/t5-norm.{args.format}"
+plt.savefig(path)
+print(f"[green]=>[/green] Saved fig to {path}.")
 
 with open(f"{PATH}/norms_by_layer.dat", "rb") as fh:
     data = pickle.load(fh)
@@ -73,8 +79,9 @@ for color, layer in zip(colors, layers):
     # plt.plot(x, reg.predict(np.sqrt(x)), color=color, label=f"Layer {layer + 1}")
 plt.legend(prop={"size": args.small_font})
 plt.xlabel("Checkpoint $t$", fontsize=args.small_font)
-plt.ylabel("Layer param norm", fontsize=args.small_font)
-plt.title("Param norm growth with $\\sqrt{\cdot}$ fit by layer", fontsize=args.large_font)
+plt.ylabel("Min parameter magnitude" if args.min else "Parameter norm", fontsize=args.small_font)
+# plt.title("Param growth with $\\sqrt{\cdot}$ fit by layer", fontsize=args.large_font)
+plt.tight_layout()
 path = f"{FIG_PATH}/t5-norm-by-layer.{args.format}"
 plt.savefig(path)
 print(f"[green]=>[/green] Saved fig to {path}.")
@@ -84,9 +91,10 @@ with open(f"{PATH}/dir_sims.dat", "rb") as fh:
 
 plt.figure()
 plt.plot(x[1:], dir_sims, ".")
-plt.title(R"Param directional similarity", fontsize=args.large_font)
+# plt.title(R"Param directional similarity", fontsize=args.large_font)
 plt.xlabel("Checkpoint $t$", fontsize=args.small_font)
-plt.ylabel("Cos sim of subsequent checkpoints", fontsize=args.small_font)
+plt.ylabel(R"$\mathrm{cos}(\theta_t, \theta_{t+1})$", fontsize=args.small_font)
+plt.tight_layout()
 path = f"{FIG_PATH}/t5-dir.{args.format}"
 plt.savefig(path)
 print(f"[green]=>[/green] Saved fig to {path}.")
@@ -100,9 +108,10 @@ for color, layer in zip(colors, layers):
     y = np.array(dir_sims_by_layer[layer]).reshape(-1, 1)
     plt.plot(x[1:], y, ".", color=color, label=f"Layer {layer + 1}")
 plt.legend(prop={"size": args.small_font})
-plt.title(R"Param directional similarity by layer", fontsize=args.large_font)
+# plt.title(R"Param directional similarity by layer", fontsize=args.large_font)
 plt.xlabel("Checkpoint $t$", fontsize=args.small_font)
-plt.ylabel("Cos sim of subsequent checkpoints", fontsize=args.small_font)
+plt.ylabel(R"$\mathrm{cos}(\theta_t, \theta_{t+1})$", fontsize=args.small_font)
+plt.tight_layout()
 path = f"{FIG_PATH}/t5-dir-by-layer.{args.format}"
 plt.savefig(path)
 print(f"[green]=>[/green] Saved fig to {path}.")

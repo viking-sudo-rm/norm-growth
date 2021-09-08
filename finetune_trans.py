@@ -24,7 +24,6 @@ from schedulers import get_policy
 from src.norm_sgd import NormSGD
 from src.saturate import saturate
 from src.loss import sequence_cross_entropy_with_logits
-from src.si_transformer import SiEncoder, SiTransConfig
 from src.language_model import transformers, LanguageModel
 from src.tokenizer import Tokenizer
 from src.utils import pad_sequence_to_len, get_mask

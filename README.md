@@ -5,6 +5,7 @@
 We recommend creating a virtual environment, and then running:
 
 ```shell
+pip3 install torch==1.9.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
 pip install -r requirements.txt
 ```
 
@@ -64,6 +65,14 @@ python grid.py --data=penn --seq_len=83
 ```
 
 ### Saturation in pretrained transformers
+
+First, you need to get the Brown corpus data:
+
+```shell
+wget http://www.sls.hawaii.edu/bley-vroman/brown.txt > $DATA/brown.txt
+```
+
+Then, you can run the script as follows:
 
 ```shell
 python eval_pretrain_sat_brown.py

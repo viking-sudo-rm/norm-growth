@@ -20,7 +20,7 @@ from src.utils import pad_sequence_to_len, get_mask
 
 
 PATH = os.environ["DATA"]
-MODELS = os.environ["MODEL"]
+MODELS = os.environ["MODELS"]
 CACHED = os.environ["CACHED"]
 
 log = logging.getLogger("rich")
@@ -158,4 +158,5 @@ for name, data in metrics.items():
     plt.title(f"{name} for all attention heads for {title}")
     plt.xlabel(name)
     plt.ylabel("# of attention heads")
+    plt.tight_layout()
     plt.savefig(f"{fig_dir}/{name}.pdf")

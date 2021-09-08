@@ -78,6 +78,7 @@ def main(args):
     plt.title("Scaling curves for transformer variants")
     plt.xlabel(R"Scaling factor $c$")
     plt.ylabel(R"Cosine similarity to sat. transformer")
+    plt.tight_layout()
 
     if not os.path.isdir(args.fig_dir):
         os.makedirs(args.fig_dir)
